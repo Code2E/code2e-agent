@@ -33,8 +33,8 @@
 
 | 작업                                                                                          | 산출물                    | 상태 |
 | --------------------------------------------------------------------------------------------- | ------------------------- | ---- |
-| Executor 구현 (generate_initial, revise_for_advisor, fix_runtime_error, revise_for_evaluator) | `src/agents/executor/`    | ⬜   |
-| Planner 구현 (4-section 구조화 출력)                                                          | `src/agents/planner/`     | ⬜   |
+| Executor 구현 (scaffold, revise_for_advisor, fix_runtime_error, revise_for_evaluator)         | `src/agents/executor/`    | ⬜   |
+| Planner 구현 (5-section 구조화 출력, [Build Sequence] 포함)                                   | `src/agents/planner/`     | ⬜   |
 | Task-M 제작 착수                                                                              | `tasks/task_m/prompt.txt` | ⬜   |
 
 ## 의존 관계

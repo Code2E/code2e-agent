@@ -1,6 +1,14 @@
-# Code2E 실험 설계 v0.6 (초안)
+# Code2E 실험 설계 v0.7 (초안)
 
-> **v0.6 변경**: 문서 내부 일관성 정리 (stale reference 수정).
+> **v0.7 변경**: Scaffolding loop 도입.
+> - `Executor.generate_initial` → `Executor.scaffold` (multi-step)
+> - Planner 출력에 `[Build Sequence]` 섹션 추가 (4-section → 5-section)
+> - Section 3.2.1 통제 변수 표에 `Max scaffold steps per task` 추가
+> - Section 3.2.3 (Planner 출력), 6.1 (pseudocode), 6.2 (코드 버전 카운트) 갱신
+> - 동기: Task-L (BE+SQLite+FE)을 1회 호출로 생성 시 Sonnet 출력 토큰 한계(기본 8K) 근접 + 각 층 품질 저하 위험.
+> - v1의 정의가 "단일 호출 결과"에서 "build sequence 전체 완료 후 누적 결과"로 바뀜. v2~v9 정의는 무변경.
+>
+> **v0.6 변경** (누적): 문서 내부 일관성 정리 (stale reference 수정).
 > - Section 10: `90 runs` → `45 runs`, `30 runs` → `5 runs` (v0.2 scope 축소 반영)
 > - Section 10: task 디렉토리에 `canonical.py` 추가 (Section 4.4와 일관성)
 > - Section 11 Stage 1: Week 6 → Week 7 초 (현재 시점 보정)
@@ -227,7 +235,8 @@ Failure categories: spec_violation (2), edge_case (1)
 | Evaluator 루프 max iterations | 5 (pilot 후 재검토 option) |
 | Advisor 루프 max iterations | 3 |
 | Advisor 피드백 포맷 | Structured 3-category (아래 3.2.2) |
-| Planner 프롬프트 출력 구조 | Structured 4-section (아래 3.2.3) |
+| Planner 프롬프트 출력 구조 | Structured 5-section (아래 3.2.3) |
+| Max scaffold steps per task | 5 (Planner가 task 복잡도에 맞춰 결정, 상한) |
 | Task 정의 | 한 번 확정 후 수정 금지 |
 | Hidden test 내용 | 시스템 구현 시작 전 확정 후 수정 금지 |
 | Process isolation | Subprocess 격리 (각 agent가 별도 Python subprocess, stdin/stdout 통신) |
@@ -274,7 +283,7 @@ Overall: <PASSED | NEEDS_REVISION>
 - 마지막 verdict가 `PASSED`면 Evaluator 루프로 진행, `NEEDS_REVISION`이면 Executor가 수정 후 재검토
 - 포맷은 실험 내내 고정 (통제 변수)
 
-#### 3.2.3 Planner 출력 구조 (4-section structured)
+#### 3.2.3 Planner 출력 구조 (5-section structured)
 
 ```
 [Task Goal]: <한 문장 요약>
@@ -291,12 +300,24 @@ Overall: <PASSED | NEEDS_REVISION>
 
 [Implementation Notes]:
   - <주의사항, 엣지 케이스>
+
+[Build Sequence]:
+  1. <step 1 — 자연어 한 줄, 무엇을 만들지>
+  2. <step 2>
+  ...
 ```
 
 **원칙**:
 - Conditions는 원문 그대로 인용 (Planner가 해석/축약하지 말 것)
-- Planner 자유도는 Architecture + Notes 섹션에만
+- Planner 자유도는 Architecture + Notes + Build Sequence 섹션에만
 - 이 포맷 고정으로 Planner 산출물의 변수성 최소화
+
+**Build Sequence 작성 가이드라인**:
+- Step 수는 task 복잡도에 비례 (권장: Task-S 1 step, Task-M 1-2 steps, Task-L 3-4 steps)
+- 상한 5 steps (통제 변수, §3.2.1)
+- 각 step은 자연어 한 줄로 무엇을 만들지 명시 (예: "1. SQLite 스키마 + 데이터 모델", "2. 인증 엔드포인트", "3. 이체 트랜잭션 로직", "4. 프론트엔드 (계좌 목록, 이체 폼)")
+- Step 순서 = 의존성 순 (DB → API → FE). 후속 step은 선행 step의 산출물에 의존 가능
+- Executor의 `scaffold` loop이 이 sequence를 순회하며 step별 1회씩 호출 (§6.1)
 
 #### 3.2.4 Evaluator 루프 max iterations 재검토 option
 
@@ -505,8 +526,13 @@ def test_C10_transfer_form_shows_result(page):
 # 1. Planner 단계
 plan = Planner.structure(prompt_txt)
 
-# 2. Executor 초기 생성
-code = Executor.generate_initial(plan)  # → v1
+# 2. Executor 초기 생성 (scaffolding loop, build_sequence 길이만큼 반복)
+#    각 step은 이전 step의 누적 결과 위에 추가 작성 (이전 파일 보존)
+code = {}
+for i, step in enumerate(plan.build_sequence):
+    code = Executor.scaffold(plan, code, step, i, len(plan.build_sequence))
+# 모든 step 완료 후 code == v1
+# scaffold sub-step은 코드 버전 카운트(v1~v9)에 포함 안 됨 — v1 내부 구조
 
 # 3. Advisor 루프 (strict sequential, max 3 reviews, static only)
 MAX_ADVISOR_REVIEWS = 3
@@ -602,12 +628,12 @@ record_final(hidden_result, code)
   - 이유 2: 세 loop의 구조 일관성
   - 이유 3: "3회 iteration" = "3회 check, 2회 revise" 로 자연스러운 해석
 
-- **최대 Executor 코드 생성 수 (v0.5)**:
-  - v1 (초기 generate)
+- **최대 Executor 코드 생성 수 (v0.7)**:
+  - v1 (scaffolding loop 누적 결과, `len(build_sequence)` 회 Executor.scaffold 호출)
   - + v2~v3 (Advisor loop: 3 reviews, max **2 revisions**)
   - + v4~v5 (Runnability pre-check: 3 attempts, max **2 revisions**)
   - + v6~v9 (Evaluator loop: 5 tests, max **4 revisions**)
-  - = **최대 v9**
+  - = **최대 v9** (scaffold sub-step은 v 카운트에 포함 안 됨; v1을 만드는 내부 구조)
 
 - 실제 대부분의 run은 Advisor에서 바로 PASSED, Runnability 0-1 attempts로 해결되므로 보통 **v5~v7** 범위에서 끝남
 - **v9는 극단적 worst case** (Advisor 2회 revise + Runnability 2회 revise + Evaluator 4회 revise 모두 소진)
