@@ -47,3 +47,27 @@
 - 완료:
 - 이월:
 - 피드백:
+
+## 고기호 한것
+### Task-S
+- tasks/task_s/
+	- prompt.txt, canonical.py, hidden_tests.py
+	- task_s의 hidden test에서 어떤 실험을 정확히 하는지 없어, 이에 대해서는 클로드와 같이 작업해 prompt.txt 정의 후 hidden_test.py구현 -> canonical.py도 저 hidden_tests에 맞게 구현
+- 목적
+	- 단축 URL 서비스
+	- 목표 5개 명시조건
+	- 핵심 메커니즘: 같은 long URL은 같은 short code
+	- 코드 충돌 처리
+	- redirect 의미
+- 구조(각각 C1, C2, C3, C4, C5로 구분)
+	- C1,C2,C3,C5 -> spec_violation
+	- C4 -> edge_case
+	1. `POST /shorten` — JSON body `{"url": "<원본 URL>"}` 를 받아 201 응답과 `{"code": "<단축코드>"}` 를 반환한다.
+	2. 같은 URL을 여러 번 단축 요청하면 항상 동일한 코드를 반환한다.
+	3. `GET /{code}` — 해당 코드에 대응하는 원본 URL로 302 리디렉션한다.
+	4. `POST /shorten` 에서 URL이 비어 있거나 유효하지 않으면 (http/https 미시작) 400을 반환한다.
+	5. `GET /{code}` 에서 존재하지 않는 코드를 요청하면 404를 반환한다.
+### level_formatters
+- 레벨 반환 형식 정의 L1, L2, L3
+- experimental_design에 맞게 정의함
+### evaluator, advisor stub 

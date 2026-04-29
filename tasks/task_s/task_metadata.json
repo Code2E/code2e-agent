@@ -1,0 +1,20 @@
+{
+  "role": "smoke",
+  "tier": "S",
+  "stack": "backend",
+  "storage": "in-memory",
+  "condition_count": 5,
+  "hidden_test_count": 12,
+  "failure_category_distribution": {
+    "spec_violation": ["C1", "C2", "C3", "C5"],
+    "edge_case": ["C4"]
+  },
+  "description": "단축 URL 서비스. 시스템 파이프라인 smoke test 전용 (측정 매트릭스 미포함).",
+  "conditions": [
+    {"id": "C1", "summary": "POST /shorten → 201 + {code}"},
+    {"id": "C2", "summary": "같은 URL → 동일 코드 (idempotent)"},
+    {"id": "C3", "summary": "GET /{code} → 302 redirect"},
+    {"id": "C4", "summary": "빈/비http URL → 400"},
+    {"id": "C5", "summary": "미존재 코드 → 404"}
+  ]
+}
